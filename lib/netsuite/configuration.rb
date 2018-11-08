@@ -3,6 +3,8 @@ module NetSuite
     extend self
 
     def reset!
+      NetSuite::Utilities.clear_cache!
+
       attributes.clear
     end
 
@@ -286,11 +288,15 @@ module NetSuite
     end
 
     def logger(value = nil)
-      attributes[:logger] = if value.nil?
-        ::Logger.new((log && !log.empty?) ? log : $stdout)
+      if value.nil?
+        attributes[:logger] ||= ::Logger.new((log && !log.empty?) ? log : $stdout)
       else
-        value
+        attributes[:logger] = value
       end
+    end
+
+    def logger=(value)
+      attributes[:logger] = value
     end
 
     def silent(value=nil)

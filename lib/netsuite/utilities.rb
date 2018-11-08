@@ -4,6 +4,11 @@ module NetSuite
 
     # TODO need structured logger for various statements
 
+    def clear_cache!
+      @netsuite_get_record_cache = {}
+      @netsuite_find_record_cache = {}
+    end
+
     def append_memo(ns_record, added_memo, opts = {})
       opts[:skip_if_exists] ||= false
 
@@ -33,7 +38,8 @@ module NetSuite
         yield
       rescue options[:exception] || Savon::SOAPFault => e
         if !e.message.include?("Only one request may be made against a session at a time") &&
-           !e.message.include?('java.util.ConcurrentModificationException')
+           !e.message.include?('java.util.ConcurrentModificationException') &&
+           !e.message.include?('SuiteTalk concurrent request limit exceeded. Request blocked.')
           raise e
         end
         if count >= (options[:attempts] || 8)
@@ -70,6 +76,7 @@ module NetSuite
       ns_item ||= NetSuite::Utilities.get_record(NetSuite::Records::ServiceSaleItem, ns_item_internal_id)
       ns_item ||= NetSuite::Utilities.get_record(NetSuite::Records::GiftCertificateItem, ns_item_internal_id)
       ns_item ||= NetSuite::Utilities.get_record(NetSuite::Records::KitItem, ns_item_internal_id)
+      ns_item ||= NetSuite::Utilities.get_record(NetSuite::Records::SerializedInventoryItem, ns_item_internal_id)
 
       if ns_item.nil?
         fail NetSuite::RecordNotFound, "item with ID #{ns_item_internal_id} not found"
@@ -81,14 +88,29 @@ module NetSuite
     def get_record(record_klass, id, opts = {})
       opts[:external_id] ||= false
 
+      if opts[:cache]
+        @netsuite_get_record_cache ||= {}
+        @netsuite_get_record_cache[record_klass.to_s] ||= {}
+
+        if cached_record = @netsuite_get_record_cache[record_klass.to_s][id.to_i]
+          return cached_record
+        end
+      end
+
       begin
         # log.debug("get record", netsuite_record_type: record_klass.name, netsuite_record_id: id)
 
-        if opts[:external_id]
-          return backoff { record_klass.get(external_id: id) }
+        ns_record = if opts[:external_id]
+          backoff { record_klass.get(external_id: id) }
         else
-          return backoff { record_klass.get(id) }
+          backoff { record_klass.get(id) }
         end
+
+        if opts[:cache]
+          @netsuite_get_record_cache[record_klass.to_s][id.to_i] = ns_record
+        end
+
+        return ns_record
       rescue ::NetSuite::RecordNotFound
         # log.warn("record not found", ns_record_type: record_klass.name, ns_record_id: id)
         return nil
