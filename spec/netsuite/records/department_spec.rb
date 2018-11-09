@@ -1,7 +1,9 @@
 require 'spec_helper'
 
 describe NetSuite::Records::Department do
-  let(:department) { NetSuite::Records::Department.new }
+  let(:test_data) { {} }
+  let(:department) { NetSuite::Records::Department.new(test_data) }
+  let(:response) { NetSuite::Response.new(:success => true, :body => {:name => 'Department 1'}) }
 
   it 'has all the right fields' do
     [
@@ -20,14 +22,21 @@ describe NetSuite::Records::Department do
   end
 
   describe '.get' do
-    context 'when the response is successful' do
-      let(:response) { NetSuite::Response.new(:success => true, :body => { :name => 'Department 1' }) }
+    subject { NetSuite::Records::Department.get(:external_id => 1) }
 
+    let(:test_data) { { :external_id => 1 } }
+
+    before(:each) do
+      expect(NetSuite::Actions::Get).to receive(:call)
+        .with([NetSuite::Records::Department, {:external_id => 1}], {})
+        .and_return(response)
+    end
+
+    context 'when the response is successful' do
       it 'returns a Department instance populated with the data from the response object' do
-        expect(NetSuite::Actions::Get).to receive(:call).with([NetSuite::Records::Department, {:external_id => 1}], {}).and_return(response)
-        department = NetSuite::Records::Department.get(:external_id => 1)
-        expect(department).to be_kind_of(NetSuite::Records::Department)
-        expect(department.name).to eql('Department 1')
+        expect(subject)
+          .to be_kind_of(NetSuite::Records::Department)
+          .and have_attributes('name' => 'Department 1')
       end
     end
 
@@ -35,69 +44,70 @@ describe NetSuite::Records::Department do
       let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
 
       it 'raises a RecordNotFound exception' do
-        expect(NetSuite::Actions::Get).to receive(:call).with([NetSuite::Records::Department, {:external_id => 1}], {}).and_return(response)
-        expect {
-          NetSuite::Records::Department.get(:external_id => 1)
-        }.to raise_error(NetSuite::RecordNotFound,
-          /NetSuite::Records::Department with OPTIONS=(.*) could not be found/)
+        expect{ subject }
+          .to raise_error(
+            NetSuite::RecordNotFound,
+            /NetSuite::Records::Department with OPTIONS=(.*) could not be found/)
       end
     end
   end
 
   describe '#add' do
-    let(:test_data) { { :acct_name => 'Test Department', :description => 'An example Department' } }
+    subject { department.add }
+
+    let(:test_data) { { :name => 'Test Department' } }
+
+    before(:each) do
+      expect(NetSuite::Actions::Add).to receive(:call)
+        .with([department], {})
+        .and_return(response)
+    end
 
     context 'when the response is successful' do
-      let(:response) { NetSuite::Response.new(:success => true, :body => { :internal_id => '1' }) }
-
-      it 'returns true' do
-        department = NetSuite::Records::Department.new(test_data)
-        expect(NetSuite::Actions::Add).to receive(:call).
-            with([department], {}).
-            and_return(response)
-        expect(department.add).to be_truthy
-      end
+      it { is_expected.to be_truthy }
     end
 
     context 'when the response is unsuccessful' do
       let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
 
-      it 'returns false' do
-        department = NetSuite::Records::Department.new(test_data)
-        expect(NetSuite::Actions::Add).to receive(:call).
-            with([department], {}).
-            and_return(response)
-        expect(department.add).to be_falsey
-      end
+      it { is_expected.to be_falsey }
     end
   end
 
   describe '#delete' do
+    subject { department.delete }
+
     let(:test_data) { { :internal_id => '1' } }
 
-    context 'when the response is successful' do
-      let(:response)  { NetSuite::Response.new(:success => true, :body => { :internal_id => '1' }) }
+    before(:each) do
+      expect(NetSuite::Actions::Delete).to receive(:call)
+        .with([department], {})
+        .and_return(response)
+    end
 
-      it 'returns true' do
-        department = NetSuite::Records::Department.new(test_data)
-        expect(NetSuite::Actions::Delete).to receive(:call).
-            with([department], {}).
-            and_return(response)
-        expect(department.delete).to be_truthy
-      end
+    context 'when the response is successful' do
+      it { is_expected.to be_truthy }
     end
 
     context 'when the response is unsuccessful' do
       let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
 
-      it 'returns false' do
-        department = NetSuite::Records::Department.new(test_data)
-        expect(NetSuite::Actions::Delete).to receive(:call).
-            with([department], {}).
-            and_return(response)
-        expect(department.delete).to be_falsey
-      end
+      it { is_expected.to be_falsey }
     end
+  end
+
+  describe '#to_record' do
+    subject { department.to_record }
+
+    let(:test_data) { { :name => 'Test Department' } }
+
+    it { is_expected.to include('listAcct:name' => 'Test Department') }
+  end
+
+  describe '#record_type' do
+    subject { department.record_type }
+
+    it { is_expected.to eql('listAcct:Department') }
   end
 
 end
