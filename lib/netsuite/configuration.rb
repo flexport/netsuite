@@ -5,6 +5,8 @@ module NetSuite
     def reset!
       NetSuite::Utilities.clear_cache!
 
+      clear_wsdl_cache
+
       attributes.clear
     end
 
@@ -13,9 +15,10 @@ module NetSuite
     end
 
     def connection(params={}, credentials={})
-      Savon.client({
-        wsdl: wsdl,
+      client = Savon.client({
+        wsdl: cached_wsdl || wsdl,
         read_timeout: read_timeout,
+        open_timeout: open_timeout,
         namespaces: namespaces,
         soap_header: auth_header(credentials).update(soap_header),
         pretty_print_xml: true,
@@ -24,6 +27,8 @@ module NetSuite
         log_level: log_level,
         log: !silent, # turn off logging entirely if configured
       }.update(params))
+      cache_wsdl(client)
+      return client
     end
 
     def filters(list = nil)
@@ -43,6 +48,35 @@ module NetSuite
       attributes[:filters] = list
     end
 
+    def wsdl_cache
+      @wsdl_cache ||= {}
+    end
+
+    def clear_wsdl_cache
+      @wsdl_cache = {}
+    end
+
+    def cached_wsdl
+      cached = wsdl_cache.fetch(wsdl, nil)
+      if cached.is_a? String
+        cached
+      elsif cached.is_a? Savon::Client
+        wsdl_cache[wsdl] = cached.instance_eval { @wsdl.xml }
+      end
+    end
+
+    def cache_wsdl(client)
+      # NOTE the Savon::Client doesn't pull the wsdl content upon
+      # instantiation; it pulls it when it recieves the #call method.
+      # If we force it to pull the wsdl here, it will duplicate the call later.
+      # So, we stash the entire client and fetch just the wsdl from it after
+      # it completes its call
+      # For reference, see:
+      # https://github.com/savonrb/savon/blob/d64925d3add33fa5531577ce9e3a28a7a93618b1/lib/savon/client.rb#L35-L37
+      # https://github.com/savonrb/savon/blob/d64925d3add33fa5531577ce9e3a28a7a93618b1/lib/savon/operation.rb#L22
+      wsdl_cache[wsdl] ||= client
+    end
+
     def api_version(version = nil)
       if version
         self.api_version = version
@@ -52,16 +86,26 @@ module NetSuite
     end
 
     def api_version=(version)
+      if attributes[:api_version] != version
+        attributes[:wsdl] = nil
+        attributes[:wsdl_domain] = nil
+      end
+
       attributes[:api_version] = version
     end
 
     def sandbox=(flag)
-      attributes[:flag] = flag
+      if attributes[:sandbox] != flag
+        attributes[:wsdl] = nil
+        attributes[:wsdl_domain] = nil
+      end
+
+      attributes[:sandbox] = flag
     end
 
     def sandbox(flag = nil)
       if flag.nil?
-        attributes[:flag] ||= false
+        attributes[:sandbox] ||= false
       else
         self.sandbox = flag
       end
@@ -103,6 +147,11 @@ module NetSuite
     end
 
     def wsdl_domain=(wsdl_domain)
+      if attributes[:wsdl_domain] != wsdl_domain
+        # reset full wsdl url to ensure it's regenerated with the updated `wsdl_domain` next time it's needed
+        attributes[:wsdl] = nil
+      end
+
       attributes[:wsdl_domain] = wsdl_domain
     end
 
@@ -275,6 +324,18 @@ module NetSuite
         self.read_timeout = timeout
       else
         attributes[:read_timeout] ||= 60
+      end
+    end
+
+    def open_timeout=(timeout)
+      attributes[:open_timeout] = timeout
+    end
+
+    def open_timeout(timeout = nil)
+      if timeout
+        self.open_timeout = timeout
+      else
+        attributes[:open_timeout]
       end
     end
 

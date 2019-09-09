@@ -7,7 +7,7 @@ module NetSuite
       include Support::Actions
       include Namespaces::TranCust
 
-      actions :get, :get_list, :add, :initialize, :delete, :update, :upsert, :search
+      actions :get, :get_deleted, :get_list, :add, :initialize, :delete, :update, :upsert, :upsert_list, :search
 
       fields :alt_handling_cost, :alt_shipping_cost, :amount_paid, :amount_remaining, :auto_apply, :balance,
         :bill_address, :contrib_pct, :created_date, :currency_name, :deferred_revenue, :discount_rate, :email,
@@ -34,10 +34,11 @@ module NetSuite
 
       record_refs :account, :bill_address_list, :created_from, :custom_form, :department, :discount_item, :entity, :gift_cert,
         :handling_tax_code, :job, :klass, :lead_source, :location, :message_sel, :partner, :posting_period, :promo_code,
-        :sales_group, :sales_rep, :ship_method, :shipping_tax_code, :subsidiary, :tax_item
+        :sales_group, :sales_rep, :ship_method, :shipping_tax_code, :subsidiary, :tax_item, :currency
 
       attr_reader :internal_id
       attr_accessor :external_id
+      attr_accessor :search_joins
 
       def initialize(attributes = {})
         @internal_id = attributes.delete(:internal_id) || attributes.delete(:@internal_id)

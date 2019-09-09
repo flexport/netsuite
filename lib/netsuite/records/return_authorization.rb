@@ -5,7 +5,7 @@ module NetSuite
       include Support::RecordRefs
       include Support::Records
       include Support::Actions
-      include Namespaces::TranSales
+      include Namespaces::TranCust
 
       # https://system.netsuite.com/help/helpcenter/en_US/srbrowser/Browser2015_2/schema/record/returnauthorization.html
 
@@ -103,9 +103,10 @@ module NetSuite
       # :partners_list,
       # :sales_team_list,
       # :ship_address_list,
-      
+
       field :billing_address,          Address
       field :custom_field_list,        CustomFieldList
+      field :item_list,                ReturnAuthorizationItemList
 
       attr_reader   :internal_id
       attr_accessor :external_id
